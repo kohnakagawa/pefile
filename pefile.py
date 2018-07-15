@@ -5699,23 +5699,43 @@ class PE(object):
         return val
 
 
+def support_bytes_default(i):
+    if isinstance(i, bytes):
+        return i.decode("utf-8")
+    raise TypeError(repr(i) + " is not JSON serializable.")
+
+
 def main():
-    import sys
+    from argparse import ArgumentParser
+    import json
 
-    usage = """\
-pefile.py <filename>
-pefile.py exports <filename>"""
+    arg_parser = ArgumentParser(description="pefile.py <filename>\npefile.py exports <filename>")
+    arg_parser.add_argument('--exports', '-e', action="store_true", default=False, dest="exports",
+                            help="show exports")
+    arg_parser.add_argument('--input', '-i', nargs=1, type=str, metavar="<input filename>",
+                            required=True, dest="input_file", help="input filename")
+    arg_parser.add_argument('--type', '-t', nargs=1, type=str, metavar="<output type>",
+                            choices=['txt', 'json'], default="txt", required=False,
+                            dest="out_type",
+                            help="output type [txt/json]\nThis option is ignored when --exports is specified.")
+    args = arg_parser.parse_args()
+    input = args.input_file[0]
 
-    if not sys.argv[1:]:
-        print(usage)
-    elif sys.argv[1] == 'exports':
-        if not sys.argv[2:]:
-            sys.exit('error: <filename> required')
-        pe = PE(sys.argv[2])
-        for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-            print(hex(pe.OPTIONAL_HEADER.ImageBase + exp.address), exp.name, exp.ordinal)
+    if args.exports:
+        pe = PE(input)
+        if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+            for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                print(hex(pe.OPTIONAL_HEADER.ImageBase + exp.address), exp.name, exp.ordinal)
+        else:
+            print("DIRECTORY_ENTRY_EXPORT not found.")
     else:
-        print(PE(sys.argv[1]).dump_info())
+        output_type = args.out_type[0]
+        if output_type == "txt":
+            print(PE(input).dump_info())
+        elif output_type == "json":
+            json.dump(PE(input).dump_dict(), sys.stdout,
+                      indent=4, separators=(',', ': '), default=support_bytes_default)
+
 
 if __name__ == '__main__':
     main()
